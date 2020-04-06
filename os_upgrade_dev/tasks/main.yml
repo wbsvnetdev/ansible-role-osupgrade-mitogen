@@ -1,0 +1,33 @@
+---
+
+#Upgrade and reboot Redhat/CentOS based servers
+- name: Run the command to display the % used space and save the output to result
+  shell: "df -h {{ check_disk_device_path }} --output=pcent | grep -v Avail | grep -o '[0-9]*'"
+  register: result
+  become: true
+
+- name: Upgrade packages  
+  yum:
+    name: "{{ server_update_yum_install_pkgs | default('*') }}"
+    state: latest 
+    update_cache: yes
+    exclude: "{{ server_update_yum_exclude_pkgs | default([]) }}"
+  register: stat_yum_upgrade_results
+  until: "stat_yum_upgrade_results is success"
+  retries: 2
+  delay: 30
+  when: 
+    - ansible_os_family == "RedHat"
+    - (result.stdout | int) < {{check_disk_limit_value}}
+  become: true
+
+- name: server update reboot | restart server
+  reboot:
+    pre_reboot_delay: "{{ server_update_reboot_pre_reboot_delay }}"
+    post_reboot_delay: "{{ server_update_reboot_post_reboot_delay }}"
+    reboot_timeout: "{{ server_update_reboot_reboot_timeout }}"
+  when: 
+    - reboot_default
+    - ansible_os_family == "RedHat"
+    - (result.stdout | int) < {{check_disk_limit_value}}
+  become: true
